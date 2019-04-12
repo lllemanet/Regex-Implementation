@@ -40,7 +40,7 @@ void preorderTraverse(Node node, int depth);
 
 /*functions for lexical analyzer*/
 void initializeAlphabet();
-Node initializeInfoNode(Node n);
+Node initializeNodeInfo(Node n);
 int nullable(Node n);
 Element firstpos(Node n);
 Element lastpos(Node n);
@@ -49,7 +49,7 @@ Element lastpos(Node n);
 void insertInList(Element start, int val);
 void removeFromList(Element *start, int val);
 Element copyList(Element el);
-Element copyElement(Element el);
+Element createElement(int val);
 Element unionList(Element el1, Element el2);
 void displayList(Element el, FILE *stream);
 
@@ -71,17 +71,17 @@ int main()
 	list->next = NULL;
 	list->val = 0;
 	insertInList(list, 1);
-	printf("prev: %d; next: %d\n", list->val, list->next->val);
-	removeFromList(&list, 1);
-	printf("prev: %d; next null? %d\n", list->val, list->next == NULL);
+	//printf("prev: %d; next: %d\n", list->val, list->next->val);
+	//removeFromList(&list, 1);
+	//printf("prev: %d; next null? %d\n", list->val, list->next == NULL);
 	insertInList(list, 1);
-	removeFromList(&list, 0);
-	printf("Afteer remove first element: start: %d\n", list->val);
+	//removeFromList(&list, 0);
+	//printf("Afteer remove first element: start: %d\n", list->val);
 	Element list2 = copyList(list);
 	insertInList(list2, 5);
 	insertInList(list2, 10);
-	//displayList(list2, stdout);
-	displayList(unionList(list, list2), stdout);
+	////displayList(list2, stdout);
+	//displayList(unionList(copyList(list), copyList(list2)), stdout);
 	
 	
 	readline(input);
@@ -92,7 +92,8 @@ int main()
 	
 	Node r = R();
 	printf("Syntax tree:\n");
-	preorderTraverse(r, 9);
+	initializeNodeInfo(r);
+	preorderTraverse(r, 0);
 	return 0;
 }
 
@@ -200,6 +201,10 @@ Node createNode(char val, Node left, Node right) {
 	node->val = val;
 	node->left = left;
 	node->right = right;
+	node->isNullable = 1;
+	node->firstpos = NULL;
+	node->lastpos = NULL;
+	node->position = 0;
 	return node;
 }
 
@@ -208,7 +213,11 @@ void preorderTraverse(Node node, int depth) {
 	while (i-- > 0)
 		putchar(' ');
 	putchar(node->val);
-	putchar('\n');
+	printf(" firstpos = ");
+	displayList(node->firstpos, stdout);
+	printf(" lastpos = ");
+	displayList(node->lastpos, stdout);
+	printf("}\n");
 	if (node->left != NULL)
 		preorderTraverse(node->left, depth + 1);
 	if (node->right != NULL)
@@ -250,11 +259,14 @@ void initializeAlphabet() {
 	*c = '\0';
 }
 
-Node initializeInfoNode(Node n) {
-	if (n->left != NULL)
-		initializeInfoNode(n->left);
-	if (n->right != NULL)
-		initializeInfoNode(n->right);
+Node initializeNodeInfo(Node n) {
+	if (n->left != NULL) {
+		initializeNodeInfo(n->left);
+	}
+	if (n->right != NULL) {
+		initializeNodeInfo(n->right);
+	}
+		
 
 	n->isNullable = nullable(n);
 	n->firstpos = firstpos(n);
@@ -266,7 +278,7 @@ int nullable(Node n) {
 		(
 			(n->val == '*') ||
 			(n->val == '|' && (n->left->isNullable || n->right->isNullable)) ||
-			(n->val = '&' && (n->left->isNullable && n->right->isNullable))
+			(n->val == '&' && (n->left->isNullable && n->right->isNullable))
 		);
 }
 
@@ -276,11 +288,29 @@ Element firstpos(Node n)
 	case '*':
 		return n->left->firstpos;
 	case '|':
-
 		return unionList(copyList(n->left->firstpos), copyList(n->right->firstpos));
+	case '&':
+		if (n->left->isNullable)
+			return unionList(copyList(n->left->firstpos), copyList(n->right->firstpos));
+		else
+			return n->left->firstpos;
+	default:
+		if (isalpha(n->val))
+			return createElement(n->position);
+		else
+			return NULL;
 	}
 }
-Element lastpos(Node n) {}
+
+Element lastpos(Node n) 
+{
+	if (n->val != '|' && n->val != '&')
+		return firstpos(n);
+	Node left = n->left;
+	n->left = n->right;
+	n->right = left;
+	return firstpos(n);
+}
 
 /*linked list funcs*/
 void insertInList(Element el, int val) {
@@ -308,35 +338,41 @@ void removeFromList(Element *start, int val) {
 
 Element copyList(Element el) 
 {
-	Element res = copyElement(el);
+	Element res = createElement(el->val);
 	Element curRes = res;
 	Element curArg = el;
 	while (curArg->next != NULL) {
 		curArg = curArg->next;
-		curRes->next = copyElement(curArg);
+		curRes->next = createElement(curArg->val);
 		curRes = curRes->next;
 	}
 	return res;
 }
 
-Element copyElement(Element el) {
+Element createElement(int val) {
 	Element res = malloc(sizeof(struct Element));
-	res->val = el->val;
+	res->val = val;
 	res->next = NULL;
 	return res;
 }
 
 Element unionList(Element el1, Element el2) {
-	while (el1->next != NULL)
-		el1 = el1->next;
-	el1->next = el2;
+	Element cur = el1;
+	while (cur->next != NULL)
+		cur = el1->next;
+	cur->next = el2;
+	return el1; //fixed later
 }
 
 void displayList(Element el, FILE *stream) {
 	char buf[MAX_STR];
-	while (el != NULL) {
+	putc('{', stream);
+	while (1) {
 		fputs(itoa(el->val, buf, 10), stream);
-		putc('\n', stream);
 		el = el->next;
+		if (el != NULL) putc(',', stream);
+		else break;
 	}
+	putc('}', stream);
 }
+
