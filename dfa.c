@@ -48,7 +48,10 @@ Element lastpos(Node n);
 /*linked list funcs*/
 void insertInList(Element start, int val);
 void removeFromList(Element *start, int val);
-void copyList(Element el);
+Element copyList(Element el);
+Element copyElement(Element el);
+Element unionList(Element el1, Element el2);
+void displayList(Element el, FILE *stream);
 
 /*miscellaneous*/
 void readline(char* in);
@@ -65,6 +68,7 @@ static char *alphabet;
 int main()
 {
 	Element list = malloc(sizeof(struct Element));
+	list->next = NULL;
 	list->val = 0;
 	insertInList(list, 1);
 	printf("prev: %d; next: %d\n", list->val, list->next->val);
@@ -72,7 +76,12 @@ int main()
 	printf("prev: %d; next null? %d\n", list->val, list->next == NULL);
 	insertInList(list, 1);
 	removeFromList(&list, 0);
-	printf("Afteer remove first element: start: %d;" list->val);
+	printf("Afteer remove first element: start: %d\n", list->val);
+	Element list2 = copyList(list);
+	insertInList(list2, 5);
+	insertInList(list2, 10);
+	//displayList(list2, stdout);
+	displayList(unionList(list, list2), stdout);
 	
 	
 	readline(input);
@@ -82,8 +91,8 @@ int main()
 	lookahead = input[ind];
 	
 	Node r = R();
-	//printf("%c\n", r->right->val);
-	preorderTraverse(r, 1);
+	printf("Syntax tree:\n");
+	preorderTraverse(r, 9);
 	return 0;
 }
 
@@ -261,21 +270,31 @@ int nullable(Node n) {
 		);
 }
 
-Element firstpos(Node n) {}
+Element firstpos(Node n) 
+{
+	switch (n->val) {
+	case '*':
+		return n->left->firstpos;
+	case '|':
+
+		return unionList(copyList(n->left->firstpos), copyList(n->right->firstpos));
+	}
+}
 Element lastpos(Node n) {}
 
 /*linked list funcs*/
 void insertInList(Element el, int val) {
 	while (el->next != NULL)
 		el = el->next;
-	Element newEl = malloc(sizeof(struct Element));
-	newEl->val = val;
-	el->next = newEl;
+	Element newel = malloc(sizeof(struct Element));
+	newel->val = val;
+	newel->next = NULL;
+	el->next = newel;
 }
 
 void removeFromList(Element *start, int val) {
 	Element *indirect = start;
-
+	
 	while ((*indirect)->val != val)
 	{ 
 		if ((*indirect)->next != NULL)
@@ -284,6 +303,40 @@ void removeFromList(Element *start, int val) {
 			return;
 	}
 
-	*indirect = (*indirect)->next; //
+	*indirect = (*indirect)->next;
 }
-void copyList(Element el) {}
+
+Element copyList(Element el) 
+{
+	Element res = copyElement(el);
+	Element curRes = res;
+	Element curArg = el;
+	while (curArg->next != NULL) {
+		curArg = curArg->next;
+		curRes->next = copyElement(curArg);
+		curRes = curRes->next;
+	}
+	return res;
+}
+
+Element copyElement(Element el) {
+	Element res = malloc(sizeof(struct Element));
+	res->val = el->val;
+	res->next = NULL;
+	return res;
+}
+
+Element unionList(Element el1, Element el2) {
+	while (el1->next != NULL)
+		el1 = el1->next;
+	el1->next = el2;
+}
+
+void displayList(Element el, FILE *stream) {
+	char buf[MAX_STR];
+	while (el != NULL) {
+		fputs(itoa(el->val, buf, 10), stream);
+		putc('\n', stream);
+		el = el->next;
+	}
+}
