@@ -68,10 +68,10 @@ int main()
 	list->val = 0;
 	insertInList(list, 1);
 	printf("prev: %d; next: %d\n", list->val, list->next->val);
-	removeFromList(list, 1);
+	removeFromList(&list, 1);
 	printf("prev: %d; next null? %d\n", list->val, list->next == NULL);
 	insertInList(list, 1);
-	removeFromList(list, 0);
+	removeFromList(&list, 0);
 	printf("Afteer remove first element: start: %d;" list->val);
 	
 	
