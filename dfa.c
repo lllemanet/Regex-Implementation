@@ -14,19 +14,23 @@
 
 #define deref(type, voidEl) *(type*)(voidEl)
 
+//weird name to prevent symbol conflicts
 #define makeptr(type, val, dest) { \
 	type* ptr0x14F24 = malloc(sizeof(type)); \
 	*ptr0x14F24 = val; \
 	dest = ptr0x14F24; \
 }
 
-
-
 //general linked list
 typedef struct Element {
 	void *val;
 	struct Element *next;
 } *Element;
+
+typedef struct DictNode {
+	void *key;
+	void *val;
+} *DictNode;
 
 typedef struct Node {
 	char val;
@@ -38,6 +42,18 @@ typedef struct Node {
 	int isNullable;
 	int position;
 } *Node; //refactor to be just Node
+
+typedef struct Dtran{
+	char sym;
+	int state;
+} Dtran;
+
+typedef struct State {
+	int id;
+	Dtran *trans;
+	Element positions;
+	int isMakred;
+} *State;
 
 
 
@@ -61,7 +77,7 @@ void preorderTraverse(Node node, int depth);
 
 /*functions for lexical analyzer*/
 void initializeAlphabet();
-Node initializeNodeInfo(Node n);
+Element initializeNodeInfo(Node n, Element followpositions);
 int nullable(Node n);
 Element firstpos(Node n);
 Element lastpos(Node n);
@@ -74,11 +90,8 @@ int compareList(Element el1, Element el2, int(*compare)(void *el1, void *el2));
 int getLengthList(Element el);
 Element copyList(Element el, void* (*getCopy)(void*));
 Element createElement(void *val);
-Element unionList(Element el1, Element el2);
+Element unionList(Element el1, Element el2, int (*compare)(void *el1, void *el2));
 void displayList(Element el, FILE *stream, char* (*toString)(void*));
-
-/*dictionary funcs*/
-
 
 /*functions for general int list*/
 int compareVoidInts(void *el1, void *el2);
@@ -87,20 +100,36 @@ char* toStringVoidInt(void *val);
 void* makeVoidInt(int val); //malloc
 void* getCopyVoidInt(void *val); //malloc
 
+/*dictionary funcs*/
+void* getDictVal(Element dict, void *key, int(*compare)(void *el1, void *el2));
+void insertInDict(Element dict, void* key, void* elem);
+void displayDictionaryWithIntAndElement(Element dict, FILE *stream, char* (*toString)(void* el));
+DictNode createDictNode(void* key, void* val);
+
 /*miscellaneous*/
 void readline(char* in);
+void addForEachInList(Element dict, Element to, Element from);
+char* strrepeatsoff(char* src);
 
 
 static char input[MAX_STR_LENGTH];
 static char lookahead;
 static int ind;
-static char *alphabet;
+static char* alphabet;
+static char* symbols;
+static int position = 1;
+
 
 /*
  *	input any regex using * () | operators and string to match
  */
 int main()
 {
+	/*DictNode dictNode = malloc(sizeof(struct DictNode));
+	dictNode->key = makeVoidInt(10);
+	dictNode->val = makeVoidInt(20);
+	Element dictionary = createElement(dictNode);
+
 	void *var1;
 	makeptr(int, 5, var1);
 
@@ -113,10 +142,6 @@ int main()
 
 	e1->next = e2;
 	
-	/*TODO make distinct procedure for 'safe' remove using literal integers*/
-	//removeFromList(&e1, var1, compareVoidInts);
-	//removeFromList(&e1, var2, compareVoidInts);
-	//removeFromList(&e1, p, compareVoidInts);
 	
 	e3 = copyList(e1, getCopyVoidInt);
 	//removeFromList(&e3, var1, compareVoidInts);
@@ -132,22 +157,37 @@ int main()
 	printf("compare(list1, list2) = %d\n", compareList(e1, e3, compareVoidInts));
 
 	printf("----\nUnion of lists: \n");
-	Element unEl = unionList(e1, e3);
-	displayList(unEl, stdout, toStringVoidInt);
+	Element unEl = unionList(e1, e3, compareVoidInts);
+	displayList(unEl, stdout, toStringVoidInt);*/
+	
+	//insertInDict(dict, makeVoidInt(5), createElement(makeVoidInt(5)));
+	//Element* list = getDictVal(dict, makeVoidInt(5), compareVoidInts);
 
+	//Element longList = createElement(makeVoidInt(6));
+	//insertInList(longList, makeVoidInt(7));
+	//free(*list);
+	//*list = longList;
+	////printf(element->)
+	//displayDictionary(dict, stdout, toStringVoidInt);
 
-
-
-	/*readline(input);
+	readline(input);
 	lookahead = input[ind];
 	initializeAlphabet();
 	printf("Alphabet: %s\n", alphabet);
+	printf("Symbols: %s\n", symbols);
 	lookahead = input[ind];
 
 	Node r = R();
 	printf("Syntax tree:\n");
-	initializeNodeInfo(r);
-	preorderTraverse(r, 0);*/
+
+	DictNode dictNode = createDictNode(makeVoidInt(-1), NULL);
+	Element followpos = createElement(dictNode);
+
+	Element posForFirstState = initializeNodeInfo(r, followpos);
+	
+	preorderTraverse(r, 0);
+	displayDictionaryWithIntAndElement(followpos, stdout, toStringVoidInt);
+
 	return 0;
 }
 
@@ -232,7 +272,6 @@ Node F1(Node left) {
 }
 
 Node P() {
-	static int position = 1;	
 	if (lookahead == '(') {
 		omitc('(');
 		Node r = R();
@@ -271,7 +310,7 @@ void preorderTraverse(Node node, int depth) {
 	displayList(node->firstpos, stdout, toStringVoidInt);
 	printf(" lastpos = ");
 	displayList(node->lastpos, stdout, toStringVoidInt);
-	printf("}\n");
+	printf("\n");
 	if (node->left != NULL)
 		preorderTraverse(node->left, depth + 1);
 	if (node->right != NULL)
@@ -303,28 +342,49 @@ void initializeAlphabet() {
 		}
 		c++;
 	}
-	alphabet = malloc(sizeof(char) * (num + 1));
-	c = alphabet;
+	symbols = malloc(sizeof(char) * (num + 1));
+	c = symbols;
 	b = buf;
 
 	while (num--) {
 		*c++ = *b++;
 	}
 	*c = '\0';
+	alphabet = strrepeatsoff(symbols);
 }
 
-Node initializeNodeInfo(Node n) {
-	if (n->left != NULL) {
-		initializeNodeInfo(n->left);
-	}
-	if (n->right != NULL) {
-		initializeNodeInfo(n->right);
-	}
-		
+Element initializeNodeInfo(Node n, Element followpositions) {
+	static int check = 1;
+	int isRoot = --check == 0 ? 1 : 0;
+	if (n->left != NULL)
+		initializeNodeInfo(n->left, followpositions);
+	if (n->right != NULL)
+		initializeNodeInfo(n->right, followpositions);
+
+	if (n->val == '&')
+		addForEachInList(followpositions, n->left->lastpos, n->right->firstpos);
+	if (n->val == '*')
+		addForEachInList(followpositions, n->left->lastpos, n->left->firstpos);
 
 	n->isNullable = nullable(n);
 	n->firstpos = firstpos(n);
 	n->lastpos = lastpos(n);
+	if (isRoot) {
+		addForEachInList(followpositions, n->lastpos, createElement(makeVoidInt(0)));
+		return n->firstpos;
+	}
+}
+
+void addForEachInList(Element dict, Element to, Element from) {
+	while (to != NULL) {
+		Element *val = (Element *)getDictVal(dict, to->val, compareVoidInts);
+		if (val == NULL)
+			insertInDict(dict, makeVoidInt(deref(int, to->val)), copyList(from, getCopyVoidInt));
+		else {
+			*val = unionList(*val, copyList(from, getCopyVoidInt), compareVoidInts); //makes some memory leak
+		}
+		to = to->next;
+	}
 }
 
 int nullable(Node n) {
@@ -342,10 +402,12 @@ Element firstpos(Node n)
 	case '*':
 		return n->left->firstpos;
 	case '|':
-		return unionList(copyList(n->left->firstpos, getCopyVoidInt), copyList(n->right->firstpos, getCopyVoidInt));
+		return unionList(copyList(n->left->firstpos, getCopyVoidInt), copyList(n->right->firstpos, getCopyVoidInt),
+			compareVoidInts);
 	case '&':
 		if (n->left->isNullable)
-			return unionList(copyList(n->left->firstpos, getCopyVoidInt), copyList(n->right->firstpos, getCopyVoidInt));
+			return unionList(copyList(n->left->firstpos, getCopyVoidInt), copyList(n->right->firstpos,
+				getCopyVoidInt), compareVoidInts);
 		else
 			return n->left->firstpos;
 	default:
@@ -379,6 +441,7 @@ void insertInList(Element el, void *val) {
 	el->next = newel;
 }
 
+/*TODO Should return the Element to be able to be freed*/
 void removeFromList(Element *start, void *val, int(*compare)(void *el1, void *el2)) {
 	Element *indirect = start;
 	
@@ -409,9 +472,8 @@ int compareList(Element el1, Element el2, int (*compare)(void *el1, void *el2)) 
 }
 
 int getLengthList(Element el) {
-	if (el == NULL) return 0;
-	int length = 1;
-	while (el->next != NULL) {
+	int length = 0;
+	while (el != NULL) {
 		length++;
 		el = el->next;
 	}
@@ -438,11 +500,31 @@ Element createElement(void *val) {
 	return res;
 }
 
-Element unionList(Element el1, Element el2) {
-	Element cur = el1;
-	while (cur->next != NULL)
-		cur = el1->next;
-	cur->next = el2;
+/*TODO el1 can be NULL. error-correcting code? not now*/
+Element unionList(Element el1, Element el2, int (*compare)(void *el1, void *el2)) {
+	Element cur1, end = el1;
+	Element cur2 = el2;
+	while (end->next != NULL)
+		end = end->next;
+	int isRestart = 0;
+	while (cur2 != NULL) {
+		cur1 = el1;
+		while (cur1 != NULL) {
+			if (compare(cur1->val, cur2->val) == 0) {
+				removeFromList(&el2, cur2->val, compare);
+				isRestart = 1;
+				break;
+			}
+			cur1 = cur1->next;
+		}
+		if (isRestart) {
+			cur2 = el2;
+			isRestart = 0;
+		}
+		else
+			cur2 = cur2->next;
+	}
+	end->next = el2;
 	return el1;
 }
 
@@ -462,6 +544,39 @@ void displayList(Element el, FILE *stream, char* (*toString)(void*)) {
 	putc(']', stream);
 }
 
+/*dictionary funcs*/
+void* getDictVal(Element dict, void *key, int(*compare)(void *el1, void *el2)) {
+	while (dict != NULL) {
+		DictNode n = (DictNode)dict->val;
+		if (compare(key, n->key) == 0)
+			return (&(n->val));
+		dict = dict->next;
+	}
+	return NULL;
+}
+
+void insertInDict(Element dict, void* key, void* val) {
+	insertInList(dict, createDictNode(key, val));
+}
+
+void displayDictionaryWithIntAndElement(Element dict, FILE *stream, char* (*toString)(void* el)) {
+	while (dict != NULL) {
+		DictNode d = (DictNode)dict->val;
+		fprintf(stream, "key = %d; val = ", deref(int, d->key)); //TODO not generic key
+		displayList(d->val, stream, toString); //TODO not generic val display 
+		printf("\n");
+		dict = dict->next;
+	}
+}
+
+DictNode createDictNode(void* key, void* val) {
+	DictNode node = malloc(sizeof(struct DictNode));
+	node->key = key;
+	node->val = val;
+	return node;
+}
+
+/*int methods*/
 int compareVoidInts(void *el1, void *el2) {
 	return deref(int, el1) - deref(int, el2);
 }
@@ -482,4 +597,29 @@ void* makeVoidInt(int val) {
 	void *var;
 	makeptr(int, val, var);
 	return var;
+}
+
+char* strrepeatsoff(char* src) {
+	char buf[MAX_STR_LENGTH];
+	char* bufcur = buf;
+	char* srccur = src; //check to add
+
+	while (*srccur != '\0') {
+		char* bufch = buf; //check if appeared in buf
+		while (bufch != bufcur) {
+			if (*bufch == *srccur) {
+				srccur++; //since if srctr == '\0' it will not be equal to any bufch before buf
+				bufch = buf - 1;
+			}
+			bufch++;
+		}
+		*bufcur = *srccur;
+		bufcur++;
+		if (srccur == '\0') break;
+		srccur++;
+	}
+	
+	char *res = malloc(sizeof(char) * (bufcur - buf));
+	memcpy(res, buf, bufcur - buf);
+	return res;
 }
