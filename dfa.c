@@ -4,17 +4,27 @@
 #include <string.h>
 
 
-#define MAX_STR 100
-#define retifnull(e1, e2) { \
-	if (e1 == NULL && e2 == NULL) return 0; \
-	if (e1 == NULL) return -1; \
-	if (e2 == NULL) return 1; \
-} 
+#define MAX_STR_LENGTH 100
+
+#define retifnull(el0x1, el0x2) { \
+	if (el0x1 == NULL && el0x2 == NULL) return 0; \
+	if (el0x1 == NULL) return -1; \
+	if (el0x2 == NULL) return 1; \
+}
+
+#define deref(type, voidEl) *(type*)(voidEl)
+
+#define makeptr(type, val, dest) { \
+	type* ptr0x14F24 = malloc(sizeof(type)); \
+	*ptr0x14F24 = val; \
+	dest = ptr0x14F24; \
+}
 
 
-//linked list element
+
+//general linked list
 typedef struct Element {
-	int val;
+	void *val;
 	struct Element *next;
 } *Element;
 
@@ -28,6 +38,12 @@ typedef struct Node {
 	int isNullable;
 	int position;
 } *Node; //refactor to be just Node
+
+
+
+//typedef struct Dictl {
+//
+//} *DictEl;
 
 
 /*functions for parsing*/
@@ -50,21 +66,32 @@ int nullable(Node n);
 Element firstpos(Node n);
 Element lastpos(Node n);
 
+
 /*linked list funcs*/
-void insertInList(Element start, int val);
-void removeFromList(Element *start, int val);
-int compareList(Element el1, Element el2);
+void insertInList(Element start, void *val);
+void removeFromList(Element *start, void *val, int(*compare)(void *el1, void *el2));
+int compareList(Element el1, Element el2, int(*compare)(void *el1, void *el2));
 int getLengthList(Element el);
-Element copyList(Element el);
-Element createElement(int val);
+Element copyList(Element el, void* (*getCopy)(void*));
+Element createElement(void *val);
 Element unionList(Element el1, Element el2);
-void displayList(Element el, FILE *stream);
+void displayList(Element el, FILE *stream, char* (*toString)(void*));
+
+/*dictionary funcs*/
+
+
+/*functions for general int list*/
+int compareVoidInts(void *el1, void *el2);
+char* toStringVoidInt(void *val);
+//be careful with made copies
+void* makeVoidInt(int val); //malloc
+void* getCopyVoidInt(void *val); //malloc
 
 /*miscellaneous*/
 void readline(char* in);
 
 
-static char input[MAX_STR];
+static char input[MAX_STR_LENGTH];
 static char lookahead;
 static int ind;
 static char *alphabet;
@@ -74,30 +101,53 @@ static char *alphabet;
  */
 int main()
 {
-	element list1 = malloc(sizeof(struct element));
-	list1->next = null;
-	list1->val = 0;
-	list1->next = createelement(2);
-	
-	element list2 = malloc(sizeof(struct element));
-	list2->next = null;
-	list2->val = 0;
-	list2->next = createelement(2);
-	printf("comparelist(l1, l2) = %d\n", comparelist(list1, list2));
+	void *var1;
+	makeptr(int, 5, var1);
 
+	void *var2;
+	makeptr(int, -3, var2);
+
+	Element e1 = createElement(var1);
+	Element e2 = createElement(var2);
+	Element e3 = createElement(getCopyVoidInt(var2));
+
+	e1->next = e2;
 	
+	/*TODO make distinct procedure for 'safe' remove using literal integers*/
+	//removeFromList(&e1, var1, compareVoidInts);
+	//removeFromList(&e1, var2, compareVoidInts);
+	//removeFromList(&e1, p, compareVoidInts);
 	
-	
-	readline(input);
+	e3 = copyList(e1, getCopyVoidInt);
+	//removeFromList(&e3, var1, compareVoidInts);
+
+	printf("%d\n", getLengthList(e1));
+	displayList(e1, stdout, toStringVoidInt);
+	putchar('\n');
+
+	printf("%d\n", getLengthList(e3));
+	displayList(e3, stdout, toStringVoidInt);
+	putchar('\n');
+
+	printf("compare(list1, list2) = %d\n", compareList(e1, e3, compareVoidInts));
+
+	printf("----\nUnion of lists: \n");
+	Element unEl = unionList(e1, e3);
+	displayList(unEl, stdout, toStringVoidInt);
+
+
+
+
+	/*readline(input);
 	lookahead = input[ind];
 	initializeAlphabet();
 	printf("Alphabet: %s\n", alphabet);
 	lookahead = input[ind];
-	
+
 	Node r = R();
 	printf("Syntax tree:\n");
 	initializeNodeInfo(r);
-	preorderTraverse(r, 0);
+	preorderTraverse(r, 0);*/
 	return 0;
 }
 
@@ -218,9 +268,9 @@ void preorderTraverse(Node node, int depth) {
 		putchar(' ');
 	putchar(node->val);
 	printf(" firstpos = ");
-	displayList(node->firstpos, stdout);
+	displayList(node->firstpos, stdout, toStringVoidInt);
 	printf(" lastpos = ");
-	displayList(node->lastpos, stdout);
+	displayList(node->lastpos, stdout, toStringVoidInt);
 	printf("}\n");
 	if (node->left != NULL)
 		preorderTraverse(node->left, depth + 1);
@@ -242,7 +292,7 @@ void omit() {
 
 /*functions for lexical analyzer*/
 void initializeAlphabet() {
-	char buf[MAX_STR];
+	char buf[MAX_STR_LENGTH];
 	char *b = buf;
 	char *c = input;
 	int num = 0;
@@ -286,21 +336,24 @@ int nullable(Node n) {
 		);
 }
 
-Element firstpos(Node n) 
+Element firstpos(Node n)
 {
 	switch (n->val) {
 	case '*':
 		return n->left->firstpos;
 	case '|':
-		return unionList(copyList(n->left->firstpos), copyList(n->right->firstpos));
+		return unionList(copyList(n->left->firstpos, getCopyVoidInt), copyList(n->right->firstpos, getCopyVoidInt));
 	case '&':
 		if (n->left->isNullable)
-			return unionList(copyList(n->left->firstpos), copyList(n->right->firstpos));
+			return unionList(copyList(n->left->firstpos, getCopyVoidInt), copyList(n->right->firstpos, getCopyVoidInt));
 		else
 			return n->left->firstpos;
 	default:
-		if (isalpha(n->val))
-			return createElement(n->position);
+		if (isalpha(n->val)) {
+			void *par;
+			makeptr(int, n->position, par);
+			return createElement(par);
+		}
 		else
 			return NULL;
 	}
@@ -317,7 +370,7 @@ Element lastpos(Node n)
 }
 
 /*linked list funcs*/
-void insertInList(Element el, int val) {
+void insertInList(Element el, void *val) {
 	while (el->next != NULL)
 		el = el->next;
 	Element newel = malloc(sizeof(struct Element));
@@ -326,10 +379,10 @@ void insertInList(Element el, int val) {
 	el->next = newel;
 }
 
-void removeFromList(Element *start, int val) {
+void removeFromList(Element *start, void *val, int(*compare)(void *el1, void *el2)) {
 	Element *indirect = start;
 	
-	while ((*indirect)->val != val)
+	while (compare((*indirect)->val, val) != 0)
 	{ 
 		if ((*indirect)->next != NULL)
 			indirect = &(*indirect)->next;
@@ -337,17 +390,18 @@ void removeFromList(Element *start, int val) {
 			return;
 	}
 
+	free((*indirect)->val);
 	*indirect = (*indirect)->next;
 }
 
-int compareList(Element el1, Element el2) {
+int compareList(Element el1, Element el2, int (*compare)(void *el1, void *el2)) {
 	retifnull(el1, el2);
 
 	int temp;
 	if (getLengthList(el1) != getLengthList(el2))
 		return getLengthList(el1) - getLengthList(el2);
 	while(1) {
-		if ((temp = el1->val - el2->val) != 0) return temp;
+		if ((temp = compare(el1->val, el2->val)) != 0) return temp;
 		el1 = el1->next;
 		el2 = el2->next;
 		retifnull(el1, el2);
@@ -364,20 +418,20 @@ int getLengthList(Element el) {
 	return length;
 }
 
-Element copyList(Element el) 
+Element copyList(Element el, void* (*getCopy)(void*)) 
 {
-	Element res = createElement(el->val);
+	Element res = createElement(getCopy(el->val));
 	Element curRes = res;
 	Element curArg = el;
 	while (curArg->next != NULL) {
 		curArg = curArg->next;
-		curRes->next = createElement(curArg->val);
+		curRes->next = createElement(getCopy(curArg->val));
 		curRes = curRes->next;
 	}
 	return res;
 }
 
-Element createElement(int val) {
+Element createElement(void *val) {
 	Element res = malloc(sizeof(struct Element));
 	res->val = val;
 	res->next = NULL;
@@ -389,18 +443,43 @@ Element unionList(Element el1, Element el2) {
 	while (cur->next != NULL)
 		cur = el1->next;
 	cur->next = el2;
-	return el1; //fixed later
+	return el1;
 }
 
-void displayList(Element el, FILE *stream) {
-	char buf[MAX_STR];
-	putc('{', stream);
+void displayList(Element el, FILE *stream, char* (*toString)(void*)) {
+	if (el == NULL) {
+		fputs("[]", stream);
+		return;
+	}
+	char buf[MAX_STR_LENGTH];
+	putc('[', stream);
 	while (1) {
-		fputs(itoa(el->val, buf, 10), stream);
+		fputs(toString(el->val), stream);
 		el = el->next;
 		if (el != NULL) putc(',', stream);
 		else break;
 	}
-	putc('}', stream);
+	putc(']', stream);
 }
 
+int compareVoidInts(void *el1, void *el2) {
+	return deref(int, el1) - deref(int, el2);
+}
+
+void *getCopyVoidInt(void *val) {
+	void *ptr;
+	makeptr(int, deref(int, val), ptr);
+	return ptr;
+}
+
+char* toStringVoidInt(void *val) {
+	static char buf[MAX_STR_LENGTH];
+	itoa(deref(int, val), buf, 10);
+	return buf;
+}
+
+void* makeVoidInt(int val) {
+	void *var;
+	makeptr(int, val, var);
+	return var;
+}
