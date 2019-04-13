@@ -5,6 +5,11 @@
 
 
 #define MAX_STR 100
+#define retifnull(e1, e2) { \
+	if (e1 == NULL && e2 == NULL) return 0; \
+	if (e1 == NULL) return -1; \
+	if (e2 == NULL) return 1; \
+} 
 
 
 //linked list element
@@ -48,6 +53,8 @@ Element lastpos(Node n);
 /*linked list funcs*/
 void insertInList(Element start, int val);
 void removeFromList(Element *start, int val);
+int compareList(Element el1, Element el2);
+int getLengthList(Element el);
 Element copyList(Element el);
 Element createElement(int val);
 Element unionList(Element el1, Element el2);
@@ -67,21 +74,18 @@ static char *alphabet;
  */
 int main()
 {
-	Element list = malloc(sizeof(struct Element));
-	list->next = NULL;
-	list->val = 0;
-	insertInList(list, 1);
-	//printf("prev: %d; next: %d\n", list->val, list->next->val);
-	//removeFromList(&list, 1);
-	//printf("prev: %d; next null? %d\n", list->val, list->next == NULL);
-	insertInList(list, 1);
-	//removeFromList(&list, 0);
-	//printf("Afteer remove first element: start: %d\n", list->val);
-	Element list2 = copyList(list);
-	insertInList(list2, 5);
-	insertInList(list2, 10);
-	////displayList(list2, stdout);
-	//displayList(unionList(copyList(list), copyList(list2)), stdout);
+	element list1 = malloc(sizeof(struct element));
+	list1->next = null;
+	list1->val = 0;
+	list1->next = createelement(2);
+	
+	element list2 = malloc(sizeof(struct element));
+	list2->next = null;
+	list2->val = 0;
+	list2->next = createelement(2);
+	printf("comparelist(l1, l2) = %d\n", comparelist(list1, list2));
+
+	
 	
 	
 	readline(input);
@@ -334,6 +338,30 @@ void removeFromList(Element *start, int val) {
 	}
 
 	*indirect = (*indirect)->next;
+}
+
+int compareList(Element el1, Element el2) {
+	retifnull(el1, el2);
+
+	int temp;
+	if (getLengthList(el1) != getLengthList(el2))
+		return getLengthList(el1) - getLengthList(el2);
+	while(1) {
+		if ((temp = el1->val - el2->val) != 0) return temp;
+		el1 = el1->next;
+		el2 = el2->next;
+		retifnull(el1, el2);
+	}
+}
+
+int getLengthList(Element el) {
+	if (el == NULL) return 0;
+	int length = 1;
+	while (el->next != NULL) {
+		length++;
+		el = el->next;
+	}
+	return length;
 }
 
 Element copyList(Element el) 
