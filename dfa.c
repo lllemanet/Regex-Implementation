@@ -50,17 +50,10 @@ typedef struct Dtran{
 
 typedef struct State {
 	int id;
-	Dtran *trans;
-	Element positions;
-	int isMakred;
+	Element pos;
+	Dtran *dtrans;
+	int isMarked;
 } *State;
-
-
-
-//typedef struct Dictl {
-//
-//} *DictEl;
-
 
 /*functions for parsing*/
 Node R();
@@ -76,15 +69,14 @@ Node createNode(char val, Node left, Node right);
 void preorderTraverse(Node node, int depth);
 
 /*functions for lexical analyzer*/
-void initializeAlphabet();
-Element initializeNodeInfo(Node n, Element followpositions);
+void initAlphabet();
+Element initNodeInfo(Node n, Element followpositions);
 int nullable(Node n);
 Element firstpos(Node n);
 Element lastpos(Node n);
 
-
 /*linked list funcs*/
-void insertInList(Element start, void *val);
+void insertInList(Element* el, void *val);
 void removeFromList(Element *start, void *val, int(*compare)(void *el1, void *el2));
 int compareList(Element el1, Element el2, int(*compare)(void *el1, void *el2));
 int getLengthList(Element el);
@@ -106,13 +98,24 @@ void insertInDict(Element dict, void* key, void* elem);
 void displayDictionaryWithIntAndElement(Element dict, FILE *stream, char* (*toString)(void* el));
 DictNode createDictNode(void* key, void* val);
 
+/*State funcs*/
+Dtran* getDtranArr(char* str);
+Element initStates(Element firstPos, Element followpos);
+State createState(int id, Element pos, Dtran* dtrans, int isMarked);
+Element getPosForDtranState(char sym, Element pos, char* str, Element followpos);
+int getStateWithPos(Element states, Element pos);
+
+void displayState(State st);
+void displayDtrans(Dtran* dtrans, int size, FILE* stream);
+
+
 /*miscellaneous*/
 void readline(char* in);
 void addForEachInList(Element dict, Element to, Element from);
 char* strrepeatsoff(char* src);
 
 
-static char input[MAX_STR_LENGTH];
+static char regex[MAX_STR_LENGTH];
 static char lookahead;
 static int ind;
 static char* alphabet;
@@ -125,72 +128,147 @@ static int position = 1;
  */
 int main()
 {
-	/*DictNode dictNode = malloc(sizeof(struct DictNode));
-	dictNode->key = makeVoidInt(10);
-	dictNode->val = makeVoidInt(20);
-	Element dictionary = createElement(dictNode);
-
-	void *var1;
-	makeptr(int, 5, var1);
-
-	void *var2;
-	makeptr(int, -3, var2);
-
-	Element e1 = createElement(var1);
-	Element e2 = createElement(var2);
-	Element e3 = createElement(getCopyVoidInt(var2));
-
-	e1->next = e2;
-	
-	
-	e3 = copyList(e1, getCopyVoidInt);
-	//removeFromList(&e3, var1, compareVoidInts);
-
-	printf("%d\n", getLengthList(e1));
-	displayList(e1, stdout, toStringVoidInt);
-	putchar('\n');
-
-	printf("%d\n", getLengthList(e3));
-	displayList(e3, stdout, toStringVoidInt);
-	putchar('\n');
-
-	printf("compare(list1, list2) = %d\n", compareList(e1, e3, compareVoidInts));
-
-	printf("----\nUnion of lists: \n");
-	Element unEl = unionList(e1, e3, compareVoidInts);
-	displayList(unEl, stdout, toStringVoidInt);*/
-	
-	//insertInDict(dict, makeVoidInt(5), createElement(makeVoidInt(5)));
-	//Element* list = getDictVal(dict, makeVoidInt(5), compareVoidInts);
-
-	//Element longList = createElement(makeVoidInt(6));
-	//insertInList(longList, makeVoidInt(7));
-	//free(*list);
-	//*list = longList;
-	////printf(element->)
-	//displayDictionary(dict, stdout, toStringVoidInt);
-
-	readline(input);
-	lookahead = input[ind];
-	initializeAlphabet();
+	printf("Input regular expression:\n");
+	readline(regex);
+	printf("Input string you want to match:\n");
+	//readline()
+	initAlphabet();
+	lookahead = regex[ind];
 	printf("Alphabet: %s\n", alphabet);
 	printf("Symbols: %s\n", symbols);
-	lookahead = input[ind];
 
 	Node r = R();
-	printf("Syntax tree:\n");
-
 	DictNode dictNode = createDictNode(makeVoidInt(-1), NULL);
 	Element followpos = createElement(dictNode);
+	Element firstPos = initNodeInfo(r, followpos);
 
-	Element posForFirstState = initializeNodeInfo(r, followpos);
+	/*TEST REGION*/
 	
+	/*Element pos = createElement(makeVoidInt(1));
+	pos->next = createElement(makeVoidInt(5));
+	State st = createState(2, pos, getDtranArr(alphabet), 0);
+	Element res = getPosForDtranState('h', pos, symbols, followpos);
+	displayList(res, stdout, toStringVoidInt);
+	printf("\n%d\n\n", getStateWithPos(createElement(st), pos));*/
+
+	/*END OF TEST REGION*/
+
+	Element states = initStates(firstPos, followpos);
+	Element tr = states;
+	while (tr != NULL) {
+		displayState(tr->val);
+		tr = tr->next;
+	}
+	
+	printf("Syntax tree:\n");
 	preorderTraverse(r, 0);
 	displayDictionaryWithIntAndElement(followpos, stdout, toStringVoidInt);
 
 	return 0;
 }
 
+Element initStates(Element firstPos, Element followpos) {
+	int idcnt = 1;
+	State startState = createState(idcnt++, firstPos, NULL, 0);
+	Element states = createElement(startState);
+
+	int isMarked = 0;
+	while (isMarked == 0) {
+		isMarked = 1;
+		Element curel = states;
+		while (curel != NULL) {
+			State curstate = (State)curel->val;
+			if (!curstate->isMarked) {
+				isMarked = 0;
+				Dtran* dtrans = getDtranArr(alphabet);
+				for (int i = 0; i < strlen(alphabet); i++) {
+					Element posForDtranState = getPosForDtranState(dtrans[i].sym, curstate->pos, symbols, followpos);
+					if (posForDtranState == NULL) {
+						dtrans[i].state = -1;
+						continue;
+					}
+						
+					int id = getStateWithPos(states, posForDtranState);
+					if (id != -1)
+						dtrans[i].state = id;
+					else {
+						dtrans[i].state = idcnt;
+						State newState = createState(idcnt++, posForDtranState, NULL, 0);
+						insertInList(&states, newState);
+					}
+				}
+				curstate->dtrans = dtrans;
+				curstate->isMarked = 1;
+			}
+			curel = curel->next;
+		}
+	}
+	return states;
+}
+
+int getStateWithPos(Element states, Element pos) {
+	while (states != NULL) {
+		State state = (State)states->val;
+		if (compareList(state->pos, pos, compareVoidInts) == 0)
+			return state->id;
+		states = states->next;
+	}
+	return -1;
+}
+
+Element getPosForDtranState(char sym, Element pos, char* str, Element followpos) {
+	Element posForDtranState = NULL;
+	while (pos != NULL) {
+		int ipos = deref(int, pos->val);
+		if (str[ipos - 1] == sym) {
+			Element followforpos = *((Element *)getDictVal(followpos, pos->val, compareVoidInts));
+			posForDtranState = unionList(posForDtranState, copyList(followforpos, getCopyVoidInt), compareVoidInts);
+		}
+		pos = pos->next;
+	}
+	return posForDtranState;
+}
+
+Dtran* getDtranArr(char* str) {
+	Dtran* dtran = malloc(sizeof(struct Dtran) * strlen(str));
+	Dtran* dtrancur = dtran;
+	while (*str != '\0') {
+		dtrancur->sym = *str++;
+		dtrancur->state = -1;
+		dtrancur++;
+	}
+	return dtran;
+}
+
+State createState(int id, Element pos, Dtran* dtrans, int isMarked) {
+	State state = malloc(sizeof(struct State));
+	state->id = id;
+	state->pos = pos;
+	state->dtrans = dtrans;
+	state->isMarked = isMarked;
+	return state;
+}
+
+void displayState(State st) {
+	printf("#%d: pos=", st->id);
+	displayList(st->pos, stdout, toStringVoidInt);
+	displayDtrans(st->dtrans, strlen(alphabet), stdout);
+	printf("\n");
+}
+
+void displayDtrans(Dtran* dtrans, int size, FILE* stream) {
+	if (dtrans == NULL) {
+		fprintf(stream, "[]");
+		return;
+	}
+		
+	fprintf(stream, "[");
+	for (int i = 0; i < size; i++)
+		fprintf(stream, "%c->%d%s", dtrans[i].sym, dtrans[i].state, (i == size - 1) ? "" : "; ");
+	fprintf(stream, "]");
+}
+
+/*miscellaneous*/
 void readline(char* in) 
 {
 	while ((*in++ = getchar()) != '\n'); //easy place to hack
@@ -320,20 +398,20 @@ void preorderTraverse(Node node, int depth) {
 
 void omitc(char c) {
 	if (lookahead == c) {
-		lookahead = input[++ind];
+		lookahead = regex[++ind];
 	}
 }
 
 void omit() {
 	if (lookahead != '\0') {
-		lookahead = input[++ind]; }
+		lookahead = regex[++ind]; }
 }
 
 /*functions for lexical analyzer*/
-void initializeAlphabet() {
+void initAlphabet() {
 	char buf[MAX_STR_LENGTH];
 	char *b = buf;
-	char *c = input;
+	char *c = regex;
 	int num = 0;
 	while (*c != '\0') {
 		if (isalpha(*c)) { //TODO: extend to allow numbers
@@ -353,13 +431,13 @@ void initializeAlphabet() {
 	alphabet = strrepeatsoff(symbols);
 }
 
-Element initializeNodeInfo(Node n, Element followpositions) {
+Element initNodeInfo(Node n, Element followpositions) {
 	static int check = 1;
 	int isRoot = --check == 0 ? 1 : 0;
 	if (n->left != NULL)
-		initializeNodeInfo(n->left, followpositions);
+		initNodeInfo(n->left, followpositions);
 	if (n->right != NULL)
-		initializeNodeInfo(n->right, followpositions);
+		initNodeInfo(n->right, followpositions);
 
 	if (n->val == '&')
 		addForEachInList(followpositions, n->left->lastpos, n->right->firstpos);
@@ -371,6 +449,8 @@ Element initializeNodeInfo(Node n, Element followpositions) {
 	n->lastpos = lastpos(n);
 	if (isRoot) {
 		addForEachInList(followpositions, n->lastpos, createElement(makeVoidInt(0)));
+		if (n->isNullable)
+			return unionList(n->firstpos, createElement(makeVoidInt(0)), compareVoidInts);
 		return n->firstpos;
 	}
 }
@@ -423,22 +503,40 @@ Element firstpos(Node n)
 
 Element lastpos(Node n) 
 {
-	if (n->val != '|' && n->val != '&')
-		return firstpos(n);
-	Node left = n->left;
-	n->left = n->right;
-	n->right = left;
-	return firstpos(n);
+	switch (n->val) {
+	case '*':
+		return n->left->lastpos;
+	case '|':
+		return unionList(copyList(n->left->lastpos, getCopyVoidInt), copyList(n->right->lastpos, getCopyVoidInt),
+			compareVoidInts);
+	case '&':
+		if (n->right->isNullable)
+			return unionList(copyList(n->left->lastpos, getCopyVoidInt), copyList(n->right->lastpos,
+				getCopyVoidInt), compareVoidInts);
+		else
+			return n->right->lastpos;
+	default:
+		if (isalpha(n->val)) {
+			void *par;
+			makeptr(int, n->position, par);
+			return createElement(par);
+		}
+		else
+			return NULL;
+	}
 }
 
 /*linked list funcs*/
-void insertInList(Element el, void *val) {
-	while (el->next != NULL)
-		el = el->next;
+void insertInList(Element* el, void *val) {
+	if (*el == NULL)
+		*el = createElement(val);
+	Element cur = *el;
+	while (cur->next != NULL)
+		cur = cur->next;
 	Element newel = malloc(sizeof(struct Element));
 	newel->val = val;
 	newel->next = NULL;
-	el->next = newel;
+	cur->next = newel;
 }
 
 /*TODO Should return the Element to be able to be freed*/
@@ -502,6 +600,7 @@ Element createElement(void *val) {
 
 /*TODO el1 can be NULL. error-correcting code? not now*/
 Element unionList(Element el1, Element el2, int (*compare)(void *el1, void *el2)) {
+	if (el1 == NULL) return el2;
 	Element cur1, end = el1;
 	Element cur2 = el2;
 	while (end->next != NULL)
@@ -556,7 +655,7 @@ void* getDictVal(Element dict, void *key, int(*compare)(void *el1, void *el2)) {
 }
 
 void insertInDict(Element dict, void* key, void* val) {
-	insertInList(dict, createDictNode(key, val));
+	insertInList(&dict, createDictNode(key, val));
 }
 
 void displayDictionaryWithIntAndElement(Element dict, FILE *stream, char* (*toString)(void* el)) {
@@ -600,11 +699,13 @@ void* makeVoidInt(int val) {
 }
 
 char* strrepeatsoff(char* src) {
+	if (*src == '\0')
+		return "\0";
 	char buf[MAX_STR_LENGTH];
 	char* bufcur = buf;
 	char* srccur = src; //check to add
 
-	while (*srccur != '\0') {
+	while (1) {
 		char* bufch = buf; //check if appeared in buf
 		while (bufch != bufcur) {
 			if (*bufch == *srccur) {
@@ -615,7 +716,7 @@ char* strrepeatsoff(char* src) {
 		}
 		*bufcur = *srccur;
 		bufcur++;
-		if (srccur == '\0') break;
+		if (*srccur == '\0') break;
 		srccur++;
 	}
 	
