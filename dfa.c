@@ -76,6 +76,7 @@ Element firstpos(Node n);
 Element lastpos(Node n);
 
 /*linked list funcs*/
+void* getElement(Element list, void* val, int(*compare)(void*, void*));
 void insertInList(Element* el, void *val);
 void removeFromList(Element *start, void *val, int(*compare)(void *el1, void *el2));
 int compareList(Element el1, Element el2, int(*compare)(void *el1, void *el2));
@@ -113,9 +114,14 @@ void displayDtrans(Dtran* dtrans, int size, FILE* stream);
 void readline(char* in);
 void addForEachInList(Element dict, Element to, Element from);
 char* strrepeatsoff(char* src);
+int compareStateId(void* state, void* id);
+
+/*match*/
+int match(Element states, char* input);
 
 
 static char regex[MAX_STR_LENGTH];
+static char input[MAX_STR_LENGTH];
 static char lookahead;
 static int ind;
 static char* alphabet;
@@ -130,8 +136,6 @@ int main()
 {
 	printf("Input regular expression:\n");
 	readline(regex);
-	printf("Input string you want to match:\n");
-	//readline()
 	initAlphabet();
 	lookahead = regex[ind];
 	printf("Alphabet: %s\n", alphabet);
@@ -142,19 +146,9 @@ int main()
 	Element followpos = createElement(dictNode);
 	Element firstPos = initNodeInfo(r, followpos);
 
-	/*TEST REGION*/
-	
-	/*Element pos = createElement(makeVoidInt(1));
-	pos->next = createElement(makeVoidInt(5));
-	State st = createState(2, pos, getDtranArr(alphabet), 0);
-	Element res = getPosForDtranState('h', pos, symbols, followpos);
-	displayList(res, stdout, toStringVoidInt);
-	printf("\n%d\n\n", getStateWithPos(createElement(st), pos));*/
-
-	/*END OF TEST REGION*/
-
 	Element states = initStates(firstPos, followpos);
 	Element tr = states;
+	printf("States:\n");
 	while (tr != NULL) {
 		displayState(tr->val);
 		tr = tr->next;
@@ -162,9 +156,42 @@ int main()
 	
 	printf("Syntax tree:\n");
 	preorderTraverse(r, 0);
-	displayDictionaryWithIntAndElement(followpos, stdout, toStringVoidInt);
+	printf("Followpos:\n");
+	displayDictionaryWithIntAndElement(followpos->next, stdout, toStringVoidInt);
+
+	while (1) {
+		printf("Input string you want to match (q to quit):\n");
+		readline(input);
+		if (*input == 'q')
+			return 200;
+		printf("%s\n", match(states, input) ? "Yes" : "No");
+	}
 
 	return 0;
+}
+
+int match(Element states, char* input) {
+	State state = (State)states->val;
+	int isInAlphabet;
+	while (1) {
+		isInAlphabet = 0;
+		Dtran* dtrans = state->dtrans;
+		for (int i = 0; i < strlen(alphabet); i++) {
+			if (dtrans[i].sym == *input) {
+				isInAlphabet = 1;
+				if (dtrans[i].state == -1) {
+					return 0;
+				}
+				else {
+					state = (State)getElement(states, makeVoidInt(dtrans[i].state), compareStateId);
+					break;
+				}
+			}
+		}
+		if (!isInAlphabet)
+			return *input == '\0' && getElement(state->pos, makeVoidInt(0), compareVoidInts) != NULL;
+		input++;
+	}
 }
 
 Element initStates(Element firstPos, Element followpos) {
@@ -527,6 +554,15 @@ Element lastpos(Node n)
 }
 
 /*linked list funcs*/
+void* getElement(Element list, void* val, int(*compare)(void*, void*)) {
+	while (list != NULL) {
+		if (compare(list->val, val) == 0)
+			return list->val;
+		list = list->next;
+	}
+	return NULL;
+}
+
 void insertInList(Element* el, void *val) {
 	if (*el == NULL)
 		*el = createElement(val);
@@ -723,4 +759,8 @@ char* strrepeatsoff(char* src) {
 	char *res = malloc(sizeof(char) * (bufcur - buf));
 	memcpy(res, buf, bufcur - buf);
 	return res;
+}
+
+int compareStateId(void* state, void* id) {
+	return ((State)state)->id - deref(int, id);
 }
