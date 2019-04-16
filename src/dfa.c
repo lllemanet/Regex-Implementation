@@ -11,7 +11,7 @@
 
 
 
-typedef struct Dtran{
+typedef struct Dtran {
 	char sym;
 	int state;
 } Dtran;
@@ -62,6 +62,7 @@ void preorderTraverse(Node node, int depth);
 int match(Element states, char* input);
 
 static char input[MAX_STR_LENGTH];
+char regex[MAX_STR_LENGTH];
 static char* alphabet;
 static char* symbols;
 
@@ -71,12 +72,9 @@ static char* symbols;
  */
 int main()
 {
-	char *regex = malloc(sizeof(char) * MAX_STR_LENGTH);
 	printf("Input regular expression:\n");
-
 	readline(regex);
 	initAlphabet();
-	lookahead = regex[ind];
 	printf("Alphabet: %s\n", alphabet);
 	printf("Symbols: %s\n", symbols);
 
@@ -92,7 +90,7 @@ int main()
 		displayState(tr->val);
 		tr = tr->next;
 	}
-	
+
 	printf("Syntax tree:\n");
 	preorderTraverse(r, 0);
 	printf("Followpos:\n");
@@ -153,7 +151,7 @@ Element initStates(Element firstPos, Element followpos) {
 						dtrans[i].state = -1;
 						continue;
 					}
-						
+
 					int id = getStateWithPos(states, posForDtranState);
 					if (id != -1)
 						dtrans[i].state = id;
@@ -227,7 +225,7 @@ void displayDtrans(Dtran* dtrans, int size, FILE* stream) {
 		fprintf(stream, "[]");
 		return;
 	}
-		
+
 	fprintf(stream, "[");
 	for (int i = 0; i < size; i++)
 		fprintf(stream, "%c->%d%s", dtrans[i].sym, dtrans[i].state, (i == size - 1) ? "" : "; ");
@@ -235,7 +233,7 @@ void displayDtrans(Dtran* dtrans, int size, FILE* stream) {
 }
 
 /*miscellaneous*/
-void readline(char* in) 
+void readline(char* in)
 {
 	while ((*in++ = getchar()) != '\n'); //easy place to hack
 	*--in = '\0';
@@ -305,9 +303,9 @@ void addForEachInList(Element dict, Element to, Element from) {
 int nullable(Node n) {
 	return n->position == 0 &&
 		(
-			(n->val == '*') ||
-			(n->val == '|' && (n->left->isNullable || n->right->isNullable)) ||
-			(n->val == '&' && (n->left->isNullable && n->right->isNullable))
+			(n->val == '*')
+			|| (n->val == '|' && (n->left->isNullable || n->right->isNullable))
+			|| (n->val == '&' && (n->left->isNullable && n->right->isNullable))
 		);
 }
 
@@ -336,7 +334,7 @@ Element firstpos(Node n)
 	}
 }
 
-Element lastpos(Node n) 
+Element lastpos(Node n)
 {
 	switch (n->val) {
 	case '*':
@@ -410,7 +408,7 @@ char* strrepeatsoff(char* src) {
 		if (*srccur == '\0') break;
 		srccur++;
 	}
-	
+
 	char *res = malloc(sizeof(char) * (bufcur - buf));
 	memcpy(res, buf, bufcur - buf);
 	return res;
